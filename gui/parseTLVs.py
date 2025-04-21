@@ -43,18 +43,25 @@ def parsePointCloudTLV(tlvData, tlvLength, pointCloud):
     pointStructSize = struct.calcsize(pointStruct)
     numPoints = int(tlvLength/pointStructSize)
 
+    print(f"Parsing point cloud TLV with {numPoints} points")
+    
     for i in range(numPoints):
         try:
             x, y, z, doppler = struct.unpack(pointStruct, tlvData[:pointStructSize])
-        except:
+            tlvData = tlvData[pointStructSize:]
+            pointCloud[i,0] = x 
+            pointCloud[i,1] = y
+            pointCloud[i,2] = z
+            pointCloud[i,3] = doppler
+            # Initialize SNR and Noise to 0
+            pointCloud[i,4] = 0
+            pointCloud[i,5] = 0
+        except Exception as e:
             numPoints = i
-            print('Error: Point Cloud TLV Parser Failed')
+            print(f'Error: Point Cloud TLV Parser Failed: {str(e)}')
             break
-        tlvData = tlvData[pointStructSize:]
-        pointCloud[i,0] = x 
-        pointCloud[i,1] = y
-        pointCloud[i,2] = z
-        pointCloud[i,3] = doppler
+
+    print(f"Successfully parsed {numPoints} points")
     return numPoints, pointCloud
 
 

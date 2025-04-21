@@ -9,8 +9,8 @@ class cachedDataType:
 
     def __init__(self):
         try:
-            if(exists("history\cachedData.txt")):
-                configHistoryFile = open("history\cachedData.txt", 'r')
+            if(exists("history/cachedData.txt")):
+                configHistoryFile = open("history/cachedData.txt", 'r')
                 lines = configHistoryFile.readlines()
                 self.cachedDeviceName = lines[0][0:-1]
                 self.cachedDemoName = lines[1][0:-1]
@@ -23,7 +23,7 @@ class cachedDataType:
         if not exists("history"):
         # Note that this will create the folder in the caller's path, not necessarily in the Industrial Viz Folder
             mkdir("history")
-        configHistoryFile = open("history\cachedData.txt", 'w')
+        configHistoryFile = open("history/cachedData.txt", 'w')
         configHistoryFile.write(self.cachedDeviceName + '\n')
         configHistoryFile.write(self.cachedDemoName + '\n')
         configHistoryFile.write(self.cachedCfgPath)

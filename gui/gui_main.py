@@ -2273,9 +2273,9 @@ class Window(QDialog):
                 uart = "COM"+ self.cliCom.text()
                 data = "COM"+ self.dataCom.text()
             else:
-                uart = self.cliCom.text()
-                data = self.dataCom.text()
-            if (self.deviceType.currentText() in DEVICE_LIST[0:2]): # If using x843 device
+            	uart = self.cliCom.text()
+            	data = self.dataCom.text()
+            if(self.deviceType.currentText() in DEVICE_LIST[0:2]): # If using x843 device
                 self.parser.connectComPorts(uart, data)
             else: # If not x843 device then defer to x432 device
                 if (self.configType.currentText() == DEMO_NAME_x432_GESTURE):
@@ -2763,33 +2763,14 @@ class Window(QDialog):
         else:
             self.threeD = 1
 
-# if __name__ == '__main__':
-#     if (compileGui):
-#         appctxt = ApplicationContext()
-#         app = QApplication(sys.argv)
-#         screen = app.primaryScreen()
-#         size = screen.size()
-#         main = Window(size=size)
-#         main.show()
-#         exit_code = appctxt.app.exec_()
-#         sys.exit(exit_code)
-#     else:
-#         QApplication.setAttribute(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-#         app = QApplication(sys.argv)
-#         screen = app.primaryScreen()
-#         size = screen.size()
-#         main = Window(size=size)
-#         main.show()
-#         sys.exit(app.exec_())
-
 def run_gui():
-    if compileGui:
+    if (compileGui):
         appctxt = ApplicationContext()
         app = QApplication(sys.argv)
         screen = app.primaryScreen()
         size = screen.size()
-        main_window = Window(size=size)
-        main_window.show()
+        main = Window(size=size)
+        main.show()
         exit_code = appctxt.app.exec_()
         sys.exit(exit_code)
     else:
@@ -2797,9 +2778,10 @@ def run_gui():
         app = QApplication(sys.argv)
         screen = app.primaryScreen()
         size = screen.size()
-        main_window = Window(size=size)
-        main_window.show()
+        main = Window(size=size)
+        main.show()
         sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
     run_gui()

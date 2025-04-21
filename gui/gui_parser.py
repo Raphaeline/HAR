@@ -7,6 +7,8 @@ import time
 import numpy as np
 import math
 import datetime
+import csv
+import os
 
 # Local Imports
 from parseFrame import *
@@ -77,86 +79,128 @@ class uartParser():
     # This will return 1 frame of data. This must be called for each frame of data that is expected. It will return a dict containing all output info
     # Point Cloud and Target structure are liable to change based on the lab. Output is always cartesian.
     # DoubleCOMPort means this function refers to the xWRx843 family of devices.
+
+    
     def readAndParseUartDoubleCOMPort(self):
-        
+        """
+        Read and parse the UART data, then save the point cloud to a CSV file.
+        """
         self.fail = 0
+        outputDict = {}  # Initialize outputDict before using it.
+
         if (self.replay):
             return self.replayHist()
-    
+
         # Find magic word, and therefore the start of the frame
         index = 0
         magicByte = self.dataCom.read(1)
         frameData = bytearray(b'')
+        
         while (1):
-            # If the device doesnt transmit any data, the COMPort read function will eventually timeout
-            # Which means magicByte will hold no data, and the call to magicByte[0] will produce an error
-            # This check ensures we can give a meaningful error
+            # If the device doesn't transmit any data, the COMPort read function will eventually timeout
             if (len(magicByte) < 1):
-                print ("ERROR: No data detected on COM Port, read timed out")
-                print("\tBe sure that the device is in the proper mode, and that the cfg you are sending is valid")
+                print("ERROR: No data detected on COM Port, read timed out")
                 magicByte = self.dataCom.read(1)
-                
+
             # Found matching byte
             elif (magicByte[0] == UART_MAGIC_WORD[index]):
                 index += 1
                 frameData.append(magicByte[0])
-                if (index == 8): # Found the full magic word
+                if (index == 8):  # Found the full magic word
                     break
                 magicByte = self.dataCom.read(1)
-                
             else:
-                # When you fail, you need to compare your byte against that byte (ie the 4th) AS WELL AS compare it to the first byte of sequence
-                # Therefore, we should only read a new byte if we are sure the current byte does not match the 1st byte of the magic word sequence
                 if (index == 0): 
                     magicByte = self.dataCom.read(1)
-                index = 0 # Reset index
-                frameData = bytearray(b'') # Reset current frame data
-        
+                index = 0  # Reset index
+                frameData = bytearray(b'')  # Reset current frame data
+
         # Read in version from the header
         versionBytes = self.dataCom.read(4)
-        
         frameData += bytearray(versionBytes)
 
         # Read in length from header
         lengthBytes = self.dataCom.read(4)
         frameData += bytearray(lengthBytes)
         frameLength = int.from_bytes(lengthBytes, byteorder='little')
-        
-        # Subtract bytes that have already been read, IE magic word, version, and length
-        # This ensures that we only read the part of the frame in that we are lacking
-        frameLength -= 16 
 
-        # Read in rest of the frame
+        # Subtract bytes that have already been read, IE magic word, version, and length
+        frameLength -= 16
+
+        # Read in the rest of the frame
         frameData += bytearray(self.dataCom.read(frameLength))
 
         # If save binary is enabled
-        if(self.saveBinary == 1):
+        if (self.saveBinary == 1):
             self.binData += frameData
-            # Save data every framesPerFile frames
             self.uartCounter += 1
             if (self.uartCounter % self.framesPerFile == 0):
-                # First file requires the path to be set up
-                if(self.first_file is True): 
-                    if(os.path.exists('binData/') == False):
-                        # Note that this will create the folder in the caller's path, not necessarily in the Industrial Viz Folder                        
+                if (self.first_file is True):
+                    if (os.path.exists('binData/') == False):
                         os.mkdir('binData/')
-                    os.mkdir('binData/'+self.filepath)
+                    os.mkdir('binData/' + self.filepath)
                     self.first_file = False
                 toSave = bytes(self.binData)
                 fileName = 'binData/' + self.filepath + '/pHistBytes_' + str(math.floor(self.uartCounter/self.framesPerFile)) + '.bin'
                 bfile = open(fileName, 'wb')
                 bfile.write(toSave)
                 bfile.close()
-                # Reset binData and missed frames
                 self.binData = []
- 
-        # frameData now contains an entire frame, send it to parser
+
+        # Make sure outputDict is assigned properly.
         if (self.parserType == "DoubleCOMPort"):
             outputDict = parseStandardFrame(frameData)
         else:
-            print ('FAILURE: Bad parserType')
+            print('FAILURE: Bad parserType')
+
+        # Ensure point cloud data exists before trying to access it
+        pointCloudData = outputDict.get('pointCloud', [])
         
+        if pointCloudData is not None and len(pointCloudData) > 0:
+            # Generate filename with timestamp
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"point_cloud_data_{timestamp}.csv"
+            self.savePointCloudToCSV(pointCloudData, filename)
+
         return outputDict
+
+
+    
+    def savePointCloudToCSV(self, pointCloudData, filename="pointCloudData.csv"):
+        """
+        Saves the point cloud data to a CSV file with timestamps in the processingData folder.
+        """
+        if pointCloudData is None or pointCloudData.size == 0:
+            print("ERROR: No point cloud data to save.")
+            return
+        
+        print(f"Saving {len(pointCloudData)} points to CSV...")
+
+        # Create processingData directory if it doesn't exist
+        processing_dir = "processingData"
+        if not os.path.exists(processing_dir):
+            os.makedirs(processing_dir)
+            print(f"Created directory: {processing_dir}")
+
+        # Get current timestamp
+        current_time = datetime.datetime.now()
+
+        # Create full path for the CSV file
+        csv_path = os.path.join(processing_dir, filename)
+
+        # Open the file in append mode ('a'), create if it doesn't exist
+        with open(csv_path, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            
+            # Check if the file is empty to write headers
+            if file.tell() == 0:  # Check if the file is empty
+                writer.writerow(['Timestamp', 'x', 'y', 'z', 'Doppler', 'SNR', 'Noise', 'TrackIndex'])
+
+            # Write each point with timestamp
+            for point in pointCloudData:
+                writer.writerow([current_time.strftime("%Y-%m-%d %H:%M:%S.%f")] + list(point))
+
+        print(f"Point cloud data saved to {csv_path} at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # This function is identical to the readAndParseUartDoubleCOMPort function, but it's modified to work for SingleCOMPort devices in the xWRLx432 family
     def readAndParseUartSingleCOMPort(self):
