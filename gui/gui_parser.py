@@ -62,6 +62,19 @@ class uartParser():
         # Data storage
         self.now_time = datetime.datetime.now().strftime('%Y%m%d-%H%M')
     
+    def disconnectComPort(self):
+        try:
+            if hasattr(self, 'cliPort') and self.cliPort is not None:
+                self.cliPort.close()
+                self.cliPort = None
+            if hasattr(self, 'dataPort') and self.dataPort is not None:
+                self.dataPort.close()
+                self.dataPort = None
+            print("Serial ports disconnected.")
+        except Exception as e:
+            print("Error disconnecting COM ports:", e)
+
+
 
     def WriteFile(self, data):
         filepath=self.now_time + '.bin'

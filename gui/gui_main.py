@@ -194,6 +194,8 @@ class Window(QDialog):
             width = math.ceil(size.width()*0.9)
             height = math.ceil(size.height()*0.9)
             self.setGeometry(left, top, width, height)
+            self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint)  # Allow minimize button
+            self.showFullScreen()  # Set the window to full screen
         # Persistent point cloud
         self.previousClouds = []
 
@@ -235,6 +237,32 @@ class Window(QDialog):
 
         self.gridlay.setColumnStretch(0,1)
         self.gridlay.setColumnStretch(1,3)
+
+
+        # === Prediction Result Panel ===
+
+        self.predictedClassValue = "Fall" #Predition Class
+        self.predictedClassConfidence = "12"
+
+        self.predictionBox = QGroupBox("Prediction Result")
+        self.predictionLayout = QVBoxLayout()
+
+        self.predictedClassLabel = QLabel(f"Prediction Class : {self.predictedClassValue}")
+        self.predictedClassLabel.setStyleSheet("font-size: 18px; color: darkgreen")
+
+        self.confidenceLabel = QLabel(f"Confidence : {self.predictedClassConfidence}%")
+        self.confidenceLabel.setStyleSheet("font-size: 18px; color: darkblue")
+
+        self.predictionLayout.addWidget(self.predictedClassLabel)
+        self.predictionLayout.addWidget(self.confidenceLabel)
+        self.predictionLayout.addStretch()
+
+        self.predictionBox.setLayout(self.predictionLayout)
+
+        # Tambahkan ke grid layout kolom paling kanan
+        self.gridlay.addWidget(self.predictionBox, 0, 3, 8, 1)
+        self.gridlay.setColumnStretch(3, 1)
+
         self.setLayout(self.gridlay)
 
         # Set up parser
@@ -268,14 +296,35 @@ class Window(QDialog):
                 print("Demo not found. Using default option")
                 self.configType.setCurrentIndex(0)
 
+    def disconnectComPort(self):
+        if hasattr(self, 'cliPort') and self.cliPort:
+            self.cliPort.close()
+        if hasattr(self, 'dataPort') and self.dataPort:
+            self.dataPort.close()
+          
+
+    def disconnectCom(self):
+        try:
+            self.parseTimer.stop()
+            self.uart_thread.terminate()
+            self.parser.disconnectComPort()
+            self.connectStatus.setText("Disconnected")
+            print("COM ports closed safely.")
+        except Exception as e:
+            print("Error during disconnection:", e)
+            self.connectStatus.setText("Disconnection Failed")
+
+    
     def initConnectionPane(self):
         self.comBox = QGroupBox('Connect to Com Ports')
         self.cliCom = QLineEdit('')
         self.dataCom = QLineEdit('')
         self.connectStatus = QLabel('Not Connected')
         self.connectButton = QPushButton('Connect')
+        self.disconnectButton = QPushButton('Disconnect')
         self.saveBinaryBox = QCheckBox('Save UART')
         self.connectButton.clicked.connect(self.connectCom)
+        self.disconnectButton.clicked.connect(self.disconnectCom)
         self.configType = QComboBox()
         self.deviceType = QComboBox()
 
@@ -295,7 +344,9 @@ class Window(QDialog):
         self.comLayout.addWidget(QLabel('Demo:'),3,0)
         self.comLayout.addWidget(self.configType,3,1)
         self.comLayout.addWidget(self.connectButton,4,0)
-        self.comLayout.addWidget(self.connectStatus,4,1)
+        self.comLayout.addWidget(self.disconnectButton,4,1)
+        self.comLayout.addWidget(self.connectStatus,5,1,1,2)
+
         self.comLayout.addWidget(self.saveBinaryBox,5,0)
         self.saveBinaryBox.stateChanged.connect(self.saveBinaryBoxChanged)
 
@@ -2273,8 +2324,9 @@ class Window(QDialog):
                 uart = "COM"+ self.cliCom.text()
                 data = "COM"+ self.dataCom.text()
             else:
-            	uart = self.cliCom.text()
-            	data = self.dataCom.text()
+                uart = self.cliCom.text()
+                data = self.dataCom.text()
+            
             if(self.deviceType.currentText() in DEVICE_LIST[0:2]): # If using x843 device
                 self.parser.connectComPorts(uart, data)
             else: # If not x843 device then defer to x432 device
