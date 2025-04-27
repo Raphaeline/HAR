@@ -874,7 +874,8 @@ class Window(QDialog):
             return
         command = "sensorPosition " + self.s_height.text() + " " + self.az_tilt.text() + " " + self.elev_tilt.text() + " \n"
         # self.cThread = sendCommandThread(self.parser,command)
-        # self.cThread.start(priority=QThread.HighestPriority-2)
+        # self.cThread.start(
+        # )
 
         # Update Profile info
         self.profile['sensorHeight'] = newHeight
@@ -2355,31 +2356,72 @@ class Window(QDialog):
             
     # Select and parse the configuration file
     # Use the most recently used cfg file path as the default option
-    def selectCfg(self):
+    # def selectCfg(self):
+    #     try:
+    #         file = self.selectFile()
+    #         cachedData.setCachedCfgPath(file) # cache the file and demo used
+    #         self.parseCfg(file)
+    #         if 'maxTracks' in self.profile:
+    #             self.updateNumTracksBuffer() # Update the max number of tracks based off the config file
+    #     except Exception as e:
+    #         print(e)
+    #         print('No cfg file selected!')
+    
+    # def selectFile(self):
+    #     try:
+    #         current_dir = os.getcwd()
+    #         configDirectory = current_dir
+    #         path = cachedData.getCachedCfgPath()
+    #         if (path != ""):
+    #             configDirectory = path
+    #     except:
+    #         configDirectory = ''
+        
+    #     fd = QFileDialog()
+    #     filt = "cfg(*.cfg)"
+    #     filename = fd.getOpenFileName(directory=configDirectory,filter=filt)
+    #     return filename[0]
+    
+    # def selectCfg(self, filepath=None):
+    #     try:
+    #         current_dir = os.getcwd()
+    #         configDirectory = current_dir
+    #         if filepath is None:
+    #             filepath = "../configs/radar.cfg"
+    #             filt = "cfg(*.cfg)"
+                
+    #         if not os.path.isfile(filepath):
+    #             raise FileNotFoundError(f"⚠️ Config file not found: {filepath}")  
+    #         cachedData.setCachedCfgPath(filepath)
+    #         self.parseCfg(filepath)
+            
+    #         if 'maxTracks' in self.profile:
+    #             self.updateNumTracksBuffer() 
+    #     except Exception as e:
+    #         print(e)
+    #         print('Error loading cfg file!')
+
+
+    def selectCfg(self, filepath=None):
         try:
-            file = self.selectFile()
-            cachedData.setCachedCfgPath(file) # cache the file and demo used
-            self.parseCfg(file)
+            if filepath is filepath:
+
+                base_path = os.path.dirname(os.path.abspath(__file__))
+                filepath = os.path.normpath(os.path.join(base_path, "..", "configs", "radar.cfg"))
+
+            print(f"Try to load config from: {filepath}")
+
+            if not os.path.isfile(filepath):
+                raise FileNotFoundError(f"Config file not found: {filepath}")
+
+            cachedData.setCachedCfgPath(filepath)
+            self.parseCfg(filepath)
+
             if 'maxTracks' in self.profile:
-                self.updateNumTracksBuffer() # Update the max number of tracks based off the config file
+                self.updateNumTracksBuffer()
+
         except Exception as e:
             print(e)
-            print('No cfg file selected!')
-    
-    def selectFile(self):
-        try:
-            current_dir = os.getcwd()
-            configDirectory = current_dir
-            path = cachedData.getCachedCfgPath()
-            if (path != ""):
-                configDirectory = path
-        except:
-            configDirectory = ''
-        
-        fd = QFileDialog()
-        filt = "cfg(*.cfg)"
-        filename = fd.getOpenFileName(directory=configDirectory,filter=filt)
-        return filename[0]
 
 
     # Add a boundary box to the boundary boxes tab
