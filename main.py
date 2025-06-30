@@ -1,11 +1,8 @@
 import subprocess
-# import uvicorn
-# from api.api import app
-
+import numpy as np
+import os
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+import tensorflow as tf
 
 if __name__ == '__main__':
-    # Pastikan path ke gui_main.py sudah benar relatif terhadap direktori eksekusi main.py
     subprocess.run(["python", "gui/gui_main.py"])
-
-# if __name__ == "__main__":
-#     uvicorn.run("api.api:app", host="127.0.0.1", port=8000, reload=True)

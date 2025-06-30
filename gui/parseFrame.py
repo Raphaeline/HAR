@@ -47,7 +47,7 @@ def parseStandardFrame(frameData):
     # Initialize the track indexes to a value which indicates no track
     outputDict['pointCloud'][:, 6] = 255
 
-    print(f"Processing frame {frameNum} with {numDetectedObj} detected objects")
+    # print(f"Processing frame {frameNum} with {numDetectedObj} detected objects")
 
     # Find and parse all TLV's
     for i in range(numTLVs):
@@ -75,7 +75,7 @@ def parseStandardFrame(frameData):
             frameData = frameData[tlvHeaderLength:]
             totalLenCheck += tlvHeaderLength
 
-            print(f"Processing TLV Type: {tlvType}, Length: {tlvLength}")
+            # print(f"Processing TLV Type: {tlvType}, Length: {tlvLength}")
 
             # Detected Points
             if (tlvType == MMWDEMO_OUTPUT_MSG_DETECTED_POINTS):

@@ -285,10 +285,10 @@ class Window(QDialog):
 
         self.setLayout(self.gridlay)
 
-        # Set up parser
+        # # Set up parser
         
-        self.parser = uartParser(type=self.configType.currentText())
-        self.parser.predictor.predictionResult.connect(self.setPredictionValues)
+        # self.parser = uartParser(type=self.configType.currentText())
+        # self.parser.predictor.predictionResult.connect(self.setPredictionValues)
         
         # Check cached data for previously used demo and device to set as default options
         deviceName = cachedData.getCachedDeviceName()
@@ -2512,6 +2512,8 @@ class Window(QDialog):
             print('No numberical threshold')
 
     def connectCom(self):
+        if not hasattr(self, 'parser') or self.parser is None:
+            self.parser = uartParser()
         self.parser.frameTime = self.frameTime
         print('Parser type: ', self.configType.currentText())
         # init threads and timers

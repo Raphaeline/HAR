@@ -1,6 +1,8 @@
 __pycache__/
 history/
 processingData/
+trainResult/
+predictor/
 
 *.py[cod]
 *$py.class
