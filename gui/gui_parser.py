@@ -573,20 +573,20 @@ class Predictor(QThread):
         # Konversi seluruh array menjadi float64 terlebih dahulu
         try:
             # Method 1: Konversi langsung seluruh array
-            self.pointCloudArray = self.pointCloudArray.astype(np.float32)
+            self.pointCloudArray = self.pointCloudArray.astype(np.float64)
 
         except ValueError as e:
             print(f"Direct conversion failed: {e}")
 
             # Method 2: Konversi kolom per kolom jika direct conversion gagal
             try:
-                converted_array = np.zeros((self.pointCloudArray.shape[0], self.pointCloudArray.shape[1]), dtype=np.float32)
+                converted_array = np.zeros((self.pointCloudArray.shape[0], self.pointCloudArray.shape[1]), dtype=np.float64)
 
                 for i in range(self.pointCloudArray.shape[1]):
                     if self._stop_flag:
                         return None
                     # Konversi setiap kolom ke float64
-                    converted_array[:, i] = pd.to_numeric(self.pointCloudArray[:, i], errors='coerce').astype(np.float32)
+                    converted_array[:, i] = pd.to_numeric(self.pointCloudArray[:, i], errors='coerce').astype(np.float64)
 
                 self.pointCloudArray = converted_array
                 print(f"Column-wise conversion successful")
