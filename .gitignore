@@ -3,6 +3,9 @@ history/
 processingData/
 trainResult/
 predictor/
+models/
+Test/
+backup/
 
 *.py[cod]
 *$py.class

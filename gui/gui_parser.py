@@ -29,6 +29,7 @@ from parseFrame import *
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
+
 class uartParser():
     def __init__(self, preprocess=None, type='SDK Out of Box Demo'):
         # Set this option to 1 to save UART output from the radar device
@@ -84,7 +85,7 @@ class uartParser():
         try:
             magicByte = self.dataCom.read(1)
         except Exception as e:
-                print(f"Serial error: {e}")
+            print(f"Serial error: {e}")
 
         frameData = bytearray(b'')
         while (1):
@@ -93,7 +94,8 @@ class uartParser():
             # This check ensures we can give a meaningful error
             if (len(magicByte) < 1):
                 print("ERROR: No data detected on COM Port, read timed out")
-                print("\tBe sure that the device is in the proper mode, and that the cfg you are sending is valid")
+                print(
+                    "\tBe sure that the device is in the proper mode, and that the cfg you are sending is valid")
                 magicByte = self.dataCom.read(1)
 
             # Found matching byte
@@ -171,7 +173,8 @@ class uartParser():
             # This check ensures we can give a meaningful error
             if (len(magicByte) < 1):
                 print("ERROR: No data detected on COM Port, read timed out")
-                print("\tBe sure that the device is in the proper mode, and that the cfg you are sending is valid")
+                print(
+                    "\tBe sure that the device is in the proper mode, and that the cfg you are sending is valid")
                 magicByte = self.cliCom.read(1)
 
             # Found matching byte
@@ -293,6 +296,8 @@ class Preprocess():
         self.predictor = predictor if predictor else Predictor()
         self.pointCloudBuffer = []
         self.uniqueTimestamps = set()
+        self._stride_counter = 0
+        self.stride_value = 30
         self.maxTimestamps = 30
         self.collected_data = None
         self._start_time = None
@@ -312,7 +317,7 @@ class Preprocess():
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S.%f')
         outputWithTimestamp = []
         numFrame = 1
-        
+
         if isinstance(points, np.ndarray) and points.size > 0:
             for point in points:
                 row = [timestamp, numFrame] + \
@@ -324,32 +329,36 @@ class Preprocess():
 
         if outputWithTimestamp:
             self.addToSlidingWindow(outputWithTimestamp)
-            self.start_time = datetime.datetime.now()
+            # self.start_time = datetime.datetime.now()
         return outputWithTimestamp
 
     def addToSlidingWindow(self, dataFormatted):
         if not dataFormatted:
             return
+
         currentTimestamp = dataFormatted[0][0]
 
-        # Skip if timestamp already exists
+        # Skip jika timestamp sudah pernah masuk
         if currentTimestamp in self.timestampDataMap:
             return
 
-        # Add new timestamp and its data
+        # Tambahkan timestamp baru ke buffer dan mapping
         self.timestampBuffer.append(currentTimestamp)
         self.timestampDataMap[currentTimestamp] = dataFormatted
 
-        # Remove old data if we exceed buffer size
+        # Buang timestamp lama jika sudah melebihi kapasitas
         if len(self.timestampDataMap) > self.maxTimestamps:
             oldestTimestamp = next(iter(self.timestampDataMap))
             del self.timestampDataMap[oldestTimestamp]
 
-        # print(f"Added timestamp {currentTimestamp}. Buffer size: {len(self.timestampBuffer)}")
+        # Tambahkan hitungan stride
+        self._stride_counter += 1
 
-        # Create sliding window if we have enough timestamps
+        # Cek apakah sudah cukup timestamp
         if len(self.timestampBuffer) >= self.maxTimestamps:
-            self.createSlidingWindow()
+            if self._stride_counter >= self.stride_value:
+                self.createSlidingWindow()
+                self._stride_counter = 0  # reset counter setelah membuat window
 
     def createSlidingWindow(self):
         try:
@@ -382,13 +391,12 @@ class Preprocess():
                 # Update collected_data to latest window
                 self.collected_data = windowArray
 
-                # Start threaded processing - don't wait for result
+                window_start_time = datetime.datetime.now()
                 if not self.predictor.isRunning():
-                    self.predictor.setData(windowArray, self.start_time)
+                    self.predictor.setData(windowArray, window_start_time)
                     self.predictor.start()
                 else:
-                    # print("Predictor thread is busy, queuing data...")
-                    self.predictor.queueData(windowArray)
+                    self.predictor.queueData(windowArray, window_start_time)
 
                 return True
 
@@ -401,7 +409,7 @@ class Preprocess():
         print("Processing started in background thread...")
 
     def on_processing_finished(self, processed_data):
-        print("Processing completed in background thread")
+        print("Processing completed in background thread\n")
         if processed_data is not None:
             print(f"Processed data shape: {processed_data.shape}")
             # Update collected_data with processed result if needed
@@ -458,8 +466,10 @@ class Preprocess():
 
 
 class TNet(layers.Layer):
-    def __init__(self, k, reg_factor=0.001, **kwargs):  # Tambahkan **kwargs untuk menangani argumen tambahan
-        super(TNet, self).__init__(**kwargs)  # Pastikan super() menangani kwargs
+    # Tambahkan **kwargs untuk menangani argumen tambahan
+    def __init__(self, k, reg_factor=0.001, **kwargs):
+        # Pastikan super() menangani kwargs
+        super(TNet, self).__init__(**kwargs)
         self.k = k
         self.reg_factor = reg_factor
         self.conv1 = layers.Conv1D(64, 1, activation='relu')
@@ -467,11 +477,11 @@ class TNet(layers.Layer):
         self.conv3 = layers.Conv1D(1024, 1, activation='relu')
         self.fc1 = layers.Dense(512, activation='relu')
         self.fc2 = layers.Dense(256, activation='relu')
-        self.fc3 = layers.Dense(k * k, activation=None, kernel_initializer='glorot_uniform')
+        self.fc3 = layers.Dense(k * k, activation=None,
+                                kernel_initializer='glorot_uniform')
         self.batch_norm1 = layers.BatchNormalization()
         self.batch_norm2 = layers.BatchNormalization()
         self.batch_norm3 = layers.BatchNormalization()
-
 
     def build(self, input_shape):
         self.built = True
@@ -494,11 +504,60 @@ class TNet(layers.Layer):
 
         x_transpose = tf.transpose(x, perm=[0, 2, 1])
         product = tf.matmul(x, x_transpose, transpose_b=True)
-        orth_loss = self.reg_factor * tf.reduce_mean(tf.square(product - identity))
+        orth_loss = self.reg_factor * \
+            tf.reduce_mean(tf.square(product - identity))
         self.add_loss(orth_loss)
 
-        transformed = tf.matmul(inputs, x) 
+        transformed = tf.matmul(inputs, x)
         return transformed
+
+
+# class TNet(layers.Layer):
+#     def __init__(self, k, reg_factor=0.001, **kwargs):  # Tambahkan **kwargs untuk menangani argumen tambahan
+#         super(TNet, self).__init__(**kwargs)  # Pastikan super() menangani kwargs
+#         self.k = k
+#         self.reg_factor = reg_factor
+#         self.conv1 = layers.Conv1D(64, 1, activation='relu')
+#         self.conv2 = layers.Conv1D(128, 1, activation='relu')
+#         self.conv3 = layers.Conv1D(1024, 1, activation='relu')
+#         self.fc1 = layers.Dense(512, activation='relu')
+#         self.fc2 = layers.Dense(256, activation='relu')
+#         self.fc3 = layers.Dense(k * k, activation=None, kernel_initializer='zeros')
+#         self.batch_norm1 = layers.BatchNormalization()
+#         self.batch_norm2 = layers.BatchNormalization()
+#         self.batch_norm3 = layers.BatchNormalization()
+#         self.batch_norm4 = layers.BatchNormalization()
+#         self.batch_norm5 = layers.BatchNormalization()
+
+
+#     def build(self, input_shape):
+#         self.built = True
+
+#     def call(self, inputs):
+#         x = self.conv1(inputs)
+#         x = self.batch_norm1(x)
+#         x = self.conv2(x)
+#         x = self.batch_norm2(x)
+#         x = self.conv3(x)
+#         x = self.batch_norm3(x)
+#         x = layers.GlobalMaxPooling1D()(x)
+#         x = self.fc1(x)
+#         x = self.batch_norm4(x)
+#         x = self.fc2(x)
+#         x = self.batch_norm5(x)
+#         x = self.fc3(x)
+
+#         x = tf.reshape(x, (-1, self.k, self.k))
+#         identity = tf.eye(self.k, batch_shape=[tf.shape(inputs)[0]])
+#         x = x + identity
+
+#         x_transpose = tf.transpose(x, perm=[0, 2, 1])
+#         product = tf.matmul(x, x_transpose, transpose_b=True)
+#         orth_loss = self.reg_factor * tf.reduce_mean(tf.square(product - identity))
+#         self.add_loss(orth_loss)
+
+#         transformed = tf.matmul(inputs, x)
+#         return transformed
 
 
 get_custom_objects().update({"TNet": TNet})
@@ -523,15 +582,27 @@ class Predictor(QThread):
         self.type = type
 
         # Classification
-        self.modelPath = modelPath or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "Bootstrap-Balanced.h5"))
+        self.modelPath = modelPath or os.path.abspath(os.path.join(
+            os.path.dirname(__file__), "..", "models", "Bootstrap-Balanced2.h5"))
+        # self.modelPath = modelPath or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "Bootstrap-Balanced6.h5"))
+
+        # Load model at initialization to avoid delay on first prediction
+        if Predictor._loadedModel is None:
+            try:
+                Predictor._loadedModel = load_model(self.modelPath, custom_objects={
+                                                    "TNet": TNet}, compile=False)
+                print(f"Model berhasil di Load (awal)\n")
+            except Exception as e:
+                print(f"Error loading PointNet model: {e}\n")
 
     def setData(self, windowArray, start_time=None):
         self.windowArray = windowArray.copy() if windowArray is not None else None
         self._start_time = start_time or datetime.datetime.now()
 
-    def queueData(self, windowArray):
-        self._data_queue.append(
-            windowArray.copy() if windowArray is not None else None)
+    def queueData(self, windowArray, start_time=None):
+        if windowArray is not None:
+            self._data_queue.append(
+                (windowArray.copy(), start_time or datetime.datetime.now()))
 
     def stop(self):
         self._stop_flag = True
@@ -544,17 +615,20 @@ class Predictor(QThread):
                 # Process current data
                 if self.windowArray is not None:
                     self.processing_started.emit()
-                    result = self.checkBufferSize(self.windowArray)
+                    result = self.checkBufferSize(
+                        self.windowArray, self._start_time)
                     self.processing_finished.emit(result)
                     self.windowArray = None
 
                 # Process queued data
                 if self._data_queue and not self._stop_flag:
-                    next_data = self._data_queue.popleft()
+                    next_data, next_start_time = self._data_queue.popleft()
                     if next_data is not None:
                         self.processing_started.emit()
+                        self._start_time = next_start_time  # ini yang penting!
                         result = self.checkBufferSize(next_data)
                         self.processing_finished.emit(result)
+
                 else:
                     # No more data to process, exit thread
                     break
@@ -564,11 +638,13 @@ class Predictor(QThread):
             print(error_msg)
             self.processing_error.emit(error_msg)
 
-    def checkBufferSize(self, windowArray):
+    def checkBufferSize(self, windowArray, start_time=None):
+
         if self._stop_flag:
             return None
 
         self.pointCloudArray = windowArray.copy()
+        self._start_time = start_time or datetime.datetime.now()
 
         # Konversi seluruh array menjadi float64 terlebih dahulu
         try:
@@ -580,13 +656,15 @@ class Predictor(QThread):
 
             # Method 2: Konversi kolom per kolom jika direct conversion gagal
             try:
-                converted_array = np.zeros((self.pointCloudArray.shape[0], self.pointCloudArray.shape[1]), dtype=np.float64)
+                converted_array = np.zeros(
+                    (self.pointCloudArray.shape[0], self.pointCloudArray.shape[1]), dtype=np.float64)
 
                 for i in range(self.pointCloudArray.shape[1]):
                     if self._stop_flag:
                         return None
                     # Konversi setiap kolom ke float64
-                    converted_array[:, i] = pd.to_numeric(self.pointCloudArray[:, i], errors='coerce').astype(np.float64)
+                    converted_array[:, i] = pd.to_numeric(
+                        self.pointCloudArray[:, i], errors='coerce').astype(np.float64)
 
                 self.pointCloudArray = converted_array
                 print(f"Column-wise conversion successful")
@@ -598,12 +676,13 @@ class Predictor(QThread):
 
         # Validasi bahwa semua data sudah numeric
         if not np.issubdtype(self.pointCloudArray.dtype, np.number):
-            print(f"Warning: Array is still not numeric. Current dtype: {self.pointCloudArray.dtype}")
+            print(
+                f"Warning: Array is still not numeric. Current dtype: {self.pointCloudArray.dtype}")
             return None
 
         if self._stop_flag:
             return None
-        
+
         self.filteredData = self.pointCloudArray
         return self.bootstrap(self.pointCloudArray)
 
@@ -612,16 +691,18 @@ class Predictor(QThread):
             if self._stop_flag or filteredData is None or len(filteredData) == 0:
                 return None
 
-            # print(f"Input to Bootstrap: {filteredData.shape}")
+            print(f"Input to Bootstrap: {filteredData.shape}")
 
             # Kolom 0: timestamp, Kolom 1: numFrame, Kolom 2-4: x,y,z, Kolom 5-6: doppler,snr
             if filteredData.shape[1] < 7:
-                print(f"Error: Insufficient columns for bootstrap. Expected 7, got {filteredData.shape[1]}")
+                print(
+                    f"Error: Insufficient columns for bootstrap. Expected 7, got {filteredData.shape[1]}")
                 return filteredData
 
             # Ekstrak timestamp unik dan hitung ukuran grup
             timestamps = filteredData[:, 0]  # Kolom 0 adalah timestamp
-            uniqueTimestamps, counts = np.unique(timestamps, return_counts=True)
+            uniqueTimestamps, counts = np.unique(
+                timestamps, return_counts=True)
 
             # Cari timestamp dengan jumlah point terbanyak sebagai reference
             referenceTimestamp = uniqueTimestamps[np.argmax(counts)]
@@ -647,28 +728,35 @@ class Predictor(QThread):
                     continue
 
                 if groupSize < max(minPartial, nComponents):
-                    partialPoints = timestampData[:, 2:7]  # x, y, z, doppler, snr
-                    completedPoints = self.duplicatePointCloud(partialPoints, targetCount)
+                    # x, y, z, doppler, snr
+                    partialPoints = timestampData[:, 2:7]
+                    completedPoints = self.duplicatePointCloud(
+                        partialPoints, targetCount)
                     if completedPoints is not None and not self._stop_flag:
-                        completedArray = np.zeros((len(completedPoints), filteredData.shape[1]))
+                        completedArray = np.zeros(
+                            (len(completedPoints), filteredData.shape[1]))
                         completedArray[:, 0] = timestamp
-                        completedArray[:, 1] = np.arange(1, len(completedPoints) + 1)
+                        completedArray[:, 1] = np.arange(
+                            1, len(completedPoints) + 1)
                         completedArray[:, 2:7] = completedPoints
                         processedList.append(completedArray)
                         totalProcessed += 1
                     continue
-                
+
                 partialPoints = timestampData[:, 2:7]
-                completedPoints = self.performGMM(referenceData, partialPoints, targetCount, nComponents)
+                completedPoints = self.performGMM(
+                    referenceData, partialPoints, targetCount, nComponents)
                 if completedPoints is not None and not self._stop_flag:
-                    completedArray = np.zeros((len(completedPoints), filteredData.shape[1]))
+                    completedArray = np.zeros(
+                        (len(completedPoints), filteredData.shape[1]))
                     completedArray[:, 0] = timestamp
-                    completedArray[:, 1] = np.arange(1, len(completedPoints) + 1)
+                    completedArray[:, 1] = np.arange(
+                        1, len(completedPoints) + 1)
                     completedArray[:, 2:7] = completedPoints
                     processedList.append(completedArray)
                     # print(completedArray.shape)
                     totalProcessed += 1
-                
+
             if processedList and not self._stop_flag:
                 result = np.vstack(processedList)
                 # print(f"Bootstrap completed: {totalProcessed} timestamps processed, total {len(result)} points")
@@ -720,33 +808,32 @@ class Predictor(QThread):
             if not self._stop_flag:
                 print(f"Error in performGMM: {str(e)}")
             return partialPoints
-    
+
     def duplicatePointCloud(self, pointCloud, targetPoints):
         numOriginalPoints = pointCloud.shape[0]
         if numOriginalPoints >= targetPoints:
             return pointCloud[:targetPoints]
-        indices = np.random.choice(numOriginalPoints, size=targetPoints, replace=True)
+        indices = np.random.choice(
+            numOriginalPoints, size=targetPoints, replace=True)
         bootstrapped_cloud = pointCloud[indices]
         return bootstrapped_cloud
 
     def performModel(self, arrayData):
         # print(f"Input shape before drop column: {arrayData.shape}")
         if Predictor._loadedModel is None:
-            try:
-                Predictor._loadedModel = load_model(self.modelPath, custom_objects={"TNet": TNet}, compile=False)
-                print("Model berhasil di Load")
-            except Exception as e:
-                print(f"Error loading PointNet model: {e}")
+            print("Model belum berhasil di-load!")
             return
 
         self.model = Predictor._loadedModel
 
         # Drop kolom index 0, dan 1 yang tidak dipakai
-        processedData = np.delete(arrayData, [0, 1], axis=1) #SNR lagi mati
+        processedData = np.delete(
+            arrayData, [0, 1, 6], axis=1)  # SNR lagi mati
         print(f"Model input Shape: {processedData.shape}")
-        
+
         expectedPoint = 4500
         currentPoint = processedData.shape[0]
+        SNR = processedData[:, 4].min()
 
         if currentPoint == expectedPoint:
             try:
@@ -760,24 +847,56 @@ class Predictor(QThread):
 
                 labelMap = {0: "Stand", 1: "Sit", 2: "Walk", 3: "Fall"}
                 label = labelMap.get(labelIdx, "Unknown")
-                
+
+                # print(dopplerAverage)
+
+                # if self._start_time:
+                #     latency = (datetime.datetime.now() - self._start_time).total_seconds()
+                #     print(f"Latency dari windowing ke : {latency:.4f} detik")
+                #     self._start_time = None
+
+                # print("Probabilitas tiap kelas:")
+                # for idx, prob in enumerate(prediction[0]):
+                #     kelas = labelMap.get(idx, f"Kelas-{idx}")
+                #     print(f"  {kelas}: {prob * 100:.2f}%")
+
+                # Predictor._lastPrediction = (label, confidence, prediction[0].tolist())
+
+                # print(f"Prediction {label} with {confidence:.2f}% confidence\n")
+                # self.predictionResult.emit(label, confidence, prediction[0].tolist())
+
+                finalLabel = label  # Siapkan label akhir
+                SNR = abs(SNR)
+                print(SNR)
+
+                if label == "Fall":
+                    if 10 < SNR <= 50:
+                        finalLabel = "Walk"
+                    elif SNR <= 10:
+                        finalLabel = "Stand"
+
                 if self._start_time:
-                    latency = (datetime.datetime.now() - self._start_time).total_seconds()
-                    print(f"Latency dari *data diterima* sampai prediksi: {latency:.4f} detik")
+                    latency = (datetime.datetime.now() -
+                               self._start_time).total_seconds()
+                    print(
+                        f"Latency dari windowing ke prediksi: {latency:.4f} detik")
                     self._start_time = None
 
-                
                 print("Probabilitas tiap kelas:")
                 for idx, prob in enumerate(prediction[0]):
                     kelas = labelMap.get(idx, f"Kelas-{idx}")
                     print(f"  {kelas}: {prob * 100:.2f}%")
 
-                Predictor._lastPrediction = (label, confidence, prediction[0].tolist())
+                # Simpan dan kirim hasil prediksi AKHIR
+                Predictor._lastPrediction = (
+                    finalLabel, confidence, prediction[0].tolist())
 
-                print(f"Prediction {label} with {confidence:.2f}% confidence\n")
-                self.predictionResult.emit(label, confidence, prediction[0].tolist())
+                print(
+                    f"Prediction: {finalLabel} with {confidence:.2f}% confidence\n")
+                self.predictionResult.emit(
+                    finalLabel, confidence, prediction[0].tolist())
             except Exception as e:
                 print(f"Error during prediction: {e}")
-                
+
         else:
             print(f"Jumlah point tidak cukup\n")
