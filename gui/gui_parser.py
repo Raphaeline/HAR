@@ -477,8 +477,7 @@ class TNet(layers.Layer):
         self.conv3 = layers.Conv1D(1024, 1, activation='relu')
         self.fc1 = layers.Dense(512, activation='relu')
         self.fc2 = layers.Dense(256, activation='relu')
-        self.fc3 = layers.Dense(k * k, activation=None,
-                                kernel_initializer='glorot_uniform')
+        self.fc3 = layers.Dense(k * k, activation=None, kernel_initializer='glorot_uniform')
         self.batch_norm1 = layers.BatchNormalization()
         self.batch_norm2 = layers.BatchNormalization()
         self.batch_norm3 = layers.BatchNormalization()
@@ -504,8 +503,7 @@ class TNet(layers.Layer):
 
         x_transpose = tf.transpose(x, perm=[0, 2, 1])
         product = tf.matmul(x, x_transpose, transpose_b=True)
-        orth_loss = self.reg_factor * \
-            tf.reduce_mean(tf.square(product - identity))
+        orth_loss = self.reg_factor * tf.reduce_mean(tf.square(product - identity))
         self.add_loss(orth_loss)
 
         transformed = tf.matmul(inputs, x)
@@ -582,15 +580,12 @@ class Predictor(QThread):
         self.type = type
 
         # Classification
-        self.modelPath = modelPath or os.path.abspath(os.path.join(
-            os.path.dirname(__file__), "..", "models", "Bootstrap-Balanced2.h5"))
-        # self.modelPath = modelPath or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "Bootstrap-Balanced6.h5"))
+        self.modelPath = modelPath or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "Bootstrap-Balanced2.h5"))
 
         # Load model at initialization to avoid delay on first prediction
         if Predictor._loadedModel is None:
             try:
-                Predictor._loadedModel = load_model(self.modelPath, custom_objects={
-                                                    "TNet": TNet}, compile=False)
+                Predictor._loadedModel = load_model(self.modelPath, custom_objects={"TNet": TNet}, compile=False)
                 print(f"Model berhasil di Load (awal)\n")
             except Exception as e:
                 print(f"Error loading PointNet model: {e}\n")
@@ -601,8 +596,7 @@ class Predictor(QThread):
 
     def queueData(self, windowArray, start_time=None):
         if windowArray is not None:
-            self._data_queue.append(
-                (windowArray.copy(), start_time or datetime.datetime.now()))
+            self._data_queue.append((windowArray.copy(), start_time or datetime.datetime.now()))
 
     def stop(self):
         self._stop_flag = True
@@ -615,8 +609,7 @@ class Predictor(QThread):
                 # Process current data
                 if self.windowArray is not None:
                     self.processing_started.emit()
-                    result = self.checkBufferSize(
-                        self.windowArray, self._start_time)
+                    result = self.checkBufferSize(self.windowArray, self._start_time)
                     self.processing_finished.emit(result)
                     self.windowArray = None
 
@@ -656,15 +649,13 @@ class Predictor(QThread):
 
             # Method 2: Konversi kolom per kolom jika direct conversion gagal
             try:
-                converted_array = np.zeros(
-                    (self.pointCloudArray.shape[0], self.pointCloudArray.shape[1]), dtype=np.float64)
+                converted_array = np.zeros((self.pointCloudArray.shape[0], self.pointCloudArray.shape[1]), dtype=np.float64)
 
                 for i in range(self.pointCloudArray.shape[1]):
                     if self._stop_flag:
                         return None
                     # Konversi setiap kolom ke float64
-                    converted_array[:, i] = pd.to_numeric(
-                        self.pointCloudArray[:, i], errors='coerce').astype(np.float64)
+                    converted_array[:, i] = pd.to_numeric(self.pointCloudArray[:, i], errors='coerce').astype(np.float64)
 
                 self.pointCloudArray = converted_array
                 print(f"Column-wise conversion successful")
@@ -676,8 +667,7 @@ class Predictor(QThread):
 
         # Validasi bahwa semua data sudah numeric
         if not np.issubdtype(self.pointCloudArray.dtype, np.number):
-            print(
-                f"Warning: Array is still not numeric. Current dtype: {self.pointCloudArray.dtype}")
+            print(f"Warning: Array is still not numeric. Current dtype: {self.pointCloudArray.dtype}")
             return None
 
         if self._stop_flag:
@@ -695,14 +685,12 @@ class Predictor(QThread):
 
             # Kolom 0: timestamp, Kolom 1: numFrame, Kolom 2-4: x,y,z, Kolom 5-6: doppler,snr
             if filteredData.shape[1] < 7:
-                print(
-                    f"Error: Insufficient columns for bootstrap. Expected 7, got {filteredData.shape[1]}")
+                print(f"Error: Insufficient columns for bootstrap. Expected 7, got {filteredData.shape[1]}")
                 return filteredData
 
             # Ekstrak timestamp unik dan hitung ukuran grup
             timestamps = filteredData[:, 0]  # Kolom 0 adalah timestamp
-            uniqueTimestamps, counts = np.unique(
-                timestamps, return_counts=True)
+            uniqueTimestamps, counts = np.unique(timestamps, return_counts=True)
 
             # Cari timestamp dengan jumlah point terbanyak sebagai reference
             referenceTimestamp = uniqueTimestamps[np.argmax(counts)]
@@ -733,25 +721,20 @@ class Predictor(QThread):
                     completedPoints = self.duplicatePointCloud(
                         partialPoints, targetCount)
                     if completedPoints is not None and not self._stop_flag:
-                        completedArray = np.zeros(
-                            (len(completedPoints), filteredData.shape[1]))
+                        completedArray = np.zeros((len(completedPoints), filteredData.shape[1]))
                         completedArray[:, 0] = timestamp
-                        completedArray[:, 1] = np.arange(
-                            1, len(completedPoints) + 1)
+                        completedArray[:, 1] = np.arange(1, len(completedPoints) + 1)
                         completedArray[:, 2:7] = completedPoints
                         processedList.append(completedArray)
                         totalProcessed += 1
                     continue
 
                 partialPoints = timestampData[:, 2:7]
-                completedPoints = self.performGMM(
-                    referenceData, partialPoints, targetCount, nComponents)
+                completedPoints = self.performGMM(referenceData, partialPoints, targetCount, nComponents)
                 if completedPoints is not None and not self._stop_flag:
-                    completedArray = np.zeros(
-                        (len(completedPoints), filteredData.shape[1]))
+                    completedArray = np.zeros((len(completedPoints), filteredData.shape[1]))
                     completedArray[:, 0] = timestamp
-                    completedArray[:, 1] = np.arange(
-                        1, len(completedPoints) + 1)
+                    completedArray[:, 1] = np.arange(1, len(completedPoints) + 1)
                     completedArray[:, 2:7] = completedPoints
                     processedList.append(completedArray)
                     # print(completedArray.shape)
@@ -827,8 +810,7 @@ class Predictor(QThread):
         self.model = Predictor._loadedModel
 
         # Drop kolom index 0, dan 1 yang tidak dipakai
-        processedData = np.delete(
-            arrayData, [0, 1, 6], axis=1)  # SNR lagi mati
+        processedData = np.delete(arrayData, [0, 1], axis=1)  # SNR lagi mati
         print(f"Model input Shape: {processedData.shape}")
 
         expectedPoint = 4500
@@ -848,22 +830,6 @@ class Predictor(QThread):
                 labelMap = {0: "Stand", 1: "Sit", 2: "Walk", 3: "Fall"}
                 label = labelMap.get(labelIdx, "Unknown")
 
-                # print(dopplerAverage)
-
-                # if self._start_time:
-                #     latency = (datetime.datetime.now() - self._start_time).total_seconds()
-                #     print(f"Latency dari windowing ke : {latency:.4f} detik")
-                #     self._start_time = None
-
-                # print("Probabilitas tiap kelas:")
-                # for idx, prob in enumerate(prediction[0]):
-                #     kelas = labelMap.get(idx, f"Kelas-{idx}")
-                #     print(f"  {kelas}: {prob * 100:.2f}%")
-
-                # Predictor._lastPrediction = (label, confidence, prediction[0].tolist())
-
-                # print(f"Prediction {label} with {confidence:.2f}% confidence\n")
-                # self.predictionResult.emit(label, confidence, prediction[0].tolist())
 
                 finalLabel = label  # Siapkan label akhir
                 SNR = abs(SNR)
@@ -876,25 +842,19 @@ class Predictor(QThread):
                         finalLabel = "Stand"
 
                 if self._start_time:
-                    latency = (datetime.datetime.now() -
-                               self._start_time).total_seconds()
-                    print(
-                        f"Latency dari windowing ke prediksi: {latency:.4f} detik")
+                    latency = (datetime.datetime.now() - self._start_time).total_seconds()
+                    # print(f"Latency dari windowing ke prediksi: {latency:.4f} detik")
                     self._start_time = None
 
-                print("Probabilitas tiap kelas:")
-                for idx, prob in enumerate(prediction[0]):
-                    kelas = labelMap.get(idx, f"Kelas-{idx}")
-                    print(f"  {kelas}: {prob * 100:.2f}%")
+                # for idx, prob in enumerate(prediction[0]):
+                #     kelas = labelMap.get(idx, f"Kelas-{idx}")
+                #     print(f"{kelas}: {prob * 100:.2f}%")
 
                 # Simpan dan kirim hasil prediksi AKHIR
-                Predictor._lastPrediction = (
-                    finalLabel, confidence, prediction[0].tolist())
+                Predictor._lastPrediction = (finalLabel, confidence, prediction[0].tolist())
 
-                print(
-                    f"Prediction: {finalLabel} with {confidence:.2f}% confidence\n")
-                self.predictionResult.emit(
-                    finalLabel, confidence, prediction[0].tolist())
+                print(f"Prediction: {finalLabel} with {confidence:.2f}% confidence\n")
+                self.predictionResult.emit(finalLabel, confidence, prediction[0].tolist())
             except Exception as e:
                 print(f"Error during prediction: {e}")
 
